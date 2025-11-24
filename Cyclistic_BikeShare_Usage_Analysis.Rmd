@@ -64,7 +64,7 @@ All data cleaning and processing were performed in a separate R script for clari
 
 **Full script:**  
 
-
+https://github.com/jbrighter98/Cyclistic-Data-Analysis/blob/main/scripts/data_cleaning.R
 
 This report only highlights the *key* transformations used to prepare the data for analysis.
 
@@ -383,9 +383,15 @@ The following are some limitations on the data and the ability to use it to do a
 
 #### A: Full cleaning Script
 
+https://github.com/jbrighter98/Cyclistic-Data-Analysis/blob/main/scripts/data_cleaning.R
+
 #### B: Full Analysis Script
 
+https://github.com/jbrighter98/Cyclistic-Data-Analysis/blob/main/scripts/data_analysis.R
+
 #### C: Raw Data
+
+https://github.com/jbrighter98/Cyclistic-Data-Analysis/tree/main/data_raw
 
 ---
 
