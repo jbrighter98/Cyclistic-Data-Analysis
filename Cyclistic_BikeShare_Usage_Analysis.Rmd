@@ -1,0 +1,394 @@
+---
+title: "Cyclistic Bike-Share Usage Analysis"
+author: "Joseph Brighter"
+date: "2025-11-24"
+output: html_document
+
+---
+# Executive Summary
+
+Cyclistic, Chicago’s public bike-share program, aims to increase annual memberships, which generate more predictable and profitable revenue than one-off casual rides. To support this goal, I analyzed trip data from Q1 2019 and Q1 2020 to understand how casual riders and annual members use the system differently. The goal was to identify behavioral patterns that could inform targeted marketing strategies for converting casual users into members.
+
+The analysis reveals a clear divide between the two types of riders. Members account for over ten times more trips than casual riders, and their usage is highly consistent across weekdays, strongly suggesting regular commuting behavior. In contrast, casual riders take significantly fewer rides, but their trips last nearly three times longer. Casual usage peaks on weekends, aligning with recreational outings, tourism, and leisure-based travel. Casual riders also show noticeable spikes in trip duration on Wednesdays and weekends, indicating flexible, non-commute-driven patterns.
+
+These insights show that casual riders are not opposed to cycling—they simply use the service differently and are motivated by different needs. Their behaviors reveal a major opportunity: Cyclistic can convert a portion of these leisure-oriented riders into paying members by offering membership options and incentives that align with how they already ride.
+
+capitalize on this, I recommend three targeted strategies:
+
+  1. A weekend-focused or leisure-oriented membership tier,
+
+  2. In-app price comparison prompts showing casual riders how a membership would reduce their long-ride costs.
+  
+  3. Digital marketing campaigns activated around high-casual-usage times and locations, and
+
+Together, these approaches align directly with observed behaviors and have strong potential to convert casual users into annual members while preserving the value members already receive.
+
+---
+
+# 1. Business Task
+
+Cyclistic’s marketing team seeks to understand **how annual members and casual riders use the bike-share system differently**, in order to design strategies that convert more casual riders into members.
+
+I am seeking to understand these differences and come up with recommendations based on that data provided.
+
+---
+
+# 2. Data Sources
+
+This analysis uses the following datasets:
+
+- **Divvy_Trips_2019_Q1.csv**  
+- **Divvy_Trips_2020_Q1.csv**
+
+Both datasets were provided by *Lyft Bikes and Scooters, LLC* (operating the Divvy system for the City of Chicago) and are licensed under the Divvy **Data License Agreement**, which allows analysis and distribution as part of non-commercial reports and studies. 
+
+**Key Fields Used:**
+
+  * Trip ID  
+  * Start and end timestamps  
+  * Start and end station names and IDs  
+  * Rider type (`member` or `casual`)  
+
+**Limitations:**
+
+  * Only Q1 of each year is included  
+  * No demographic data
+  * No personal user data
+  * Possible anomalies from early COVID-19 impacts in 2020  
+
+---
+
+# 3. Data Cleaning & Preparation
+
+All data cleaning and processing were performed in a separate R script for clarity and reproducibility:
+
+**Full script:**  
+
+
+
+This report only highlights the *key* transformations used to prepare the data for analysis.
+
+```{r Import Libraries, echo=FALSE, results='hide', include=FALSE, message=FALSE, warning=FALSE}
+library("tidyverse")
+library(scales)
+
+options(dplyr.summarise.inform = FALSE)
+
+trips_2019_raw <- read.csv("data_raw/Divvy_Trips_2019_Q1.csv")
+trips_2020_raw <- read.csv("data_raw/Divvy_Trips_2020_Q1.csv")
+```
+```{r Hidden Cleaning Code, echo=FALSE}
+trips_2019_working <- read.csv("data_raw/Divvy_Trips_2019_Q1.csv")
+trips_2020_working <- read.csv("data_raw/Divvy_Trips_2020_Q1.csv")
+
+#2019
+trips_2019_working <- trips_2019_working %>% 
+  subset(!is.na(start_time))
+
+trips_2019_working <- trips_2019_working %>% 
+  subset(!is.na(end_time))
+
+# 2020
+trips_2020_working <- trips_2020_working %>% 
+  subset(!is.na(started_at))
+
+trips_2020_working <- trips_2020_working %>% 
+  subset(!is.na(ended_at))
+
+# Remove nulls in user types
+
+trips_2019_working <- trips_2019_working %>% 
+  subset(!is.na(usertype))
+
+trips_2020_working <- trips_2020_working %>% 
+  subset(!is.na(member_casual))
+
+# Remove nulls when there is no information about Start location or End location (name AND ID)
+
+# 2019
+trips_2019_working <- trips_2019_working %>% 
+  subset(!(is.na(from_station_name) & is.na(from_station_id)))
+
+trips_2019_working <- trips_2019_working %>% 
+  subset(!(is.na(to_station_name) & is.na(to_station_id)))
+
+# 2020
+trips_2020_working <- trips_2020_working %>% 
+  subset(!(is.na(start_station_name) & is.na(start_station_id)))
+
+trips_2020_working <- trips_2020_working %>% 
+  subset(!(is.na(end_station_name) & is.na(end_station_id)))
+
+# Standardize the column names and data
+
+trips_2019_working <- trips_2019_working %>% 
+  mutate(
+    ride_id = as.character(trip_id),
+    start_station_name = from_station_name,
+    start_station_id = from_station_id,
+    end_station_name = to_station_name,
+    end_station_id = to_station_id,
+    start_time = as_datetime(start_time, format="%Y-%m-%d %H:%M:%S"),
+    end_time = as_datetime(end_time, format="%Y-%m-%d %H:%M:%S"),
+    usertype = ifelse(usertype == "Subscriber", "member", "casual")
+  )
+
+trips_2020_working <- trips_2020_working %>% 
+  mutate(
+    start_time = as_datetime(started_at, format="%Y-%m-%d %H:%M:%S"),
+    end_time = as_datetime(ended_at, format="%Y-%m-%d %H:%M:%S"),
+    usertype = member_casual
+  )
+
+# Create new columns for ride_length and day_of_week
+
+trips_2019_working <- trips_2019_working %>% 
+  mutate(
+    ride_length = difftime(end_time, start_time, units="secs"),
+    day_of_week = weekdays(start_time)
+  )
+
+trips_2020_working <- trips_2020_working %>% 
+  mutate(
+    ride_length = difftime(end_time, start_time, units="secs"),
+    day_of_week = weekdays(start_time)
+  )
+
+# Remove rows with default data locations and times
+
+trips_2019_working <- trips_2019_working[!(trips_2019_working$start_station_name == "HQ QR" | trips_2019_working$ride_length < 0),]
+trips_2020_working <- trips_2020_working[!(trips_2020_working$start_station_name == "HQ QR" | trips_2020_working$ride_length < 0),]
+
+
+# Select only necessary rows for analysis
+
+trips_2019_cleaned <- trips_2019_working %>% 
+  select(
+    ride_id,
+    start_time, 
+    end_time, 
+    start_station_name, 
+    start_station_id, 
+    end_station_name, 
+    end_station_id, 
+    usertype, 
+    ride_length, 
+    day_of_week
+  )
+
+trips_2020_cleaned <- trips_2020_working %>% 
+  select(
+    ride_id,
+    start_time, 
+    end_time, 
+    start_station_name, 
+    start_station_id, 
+    end_station_name, 
+    end_station_id, 
+    usertype, 
+    ride_length, 
+    day_of_week
+  )
+
+# combine all rows
+
+all_trips_cleaned <- bind_rows(trips_2019_cleaned, trips_2020_cleaned)
+all_trips <- all_trips_cleaned
+
+summarized_data <- all_trips %>%
+  group_by(usertype, day_of_week) %>%
+  summarise(number_of_rides = n(), average_duration = mean(ride_length)) %>%
+  arrange(usertype, day_of_week)
+
+summarized_data_median <- all_trips %>%
+  group_by(usertype, day_of_week) %>%
+  summarise(number_of_rides = n(), average_duration = median(ride_length)) %>%
+  arrange(usertype, day_of_week)
+```
+## 3.1 Overview of Cleaning Steps
+
+1. Removed rows missing:  
+   - user type,  
+   - start time,  
+   - end time,  
+   - or *both* station name and station ID (start or end).  
+2. Standardized column names between 2019 and 2020 datasets.  
+3. Converted all timestamps to POSIXct format.  
+4. Removed test/invalid records and rides with negative or zero duration.  
+5. Calculated `ride_length` for both 2019 and 2020.  
+6. Created `day_of_week` with consistent ordering (Monday → Sunday).  
+7. Selected common columns and combined both datasets.
+
+## 3.2 Example: Raw Data Snapshot
+
+```{r Viewing raw data}
+glimpse(trips_2019_raw)
+glimpse(trips_2020_raw)
+```
+
+## 3.3 Example: Key Transformations
+
+```{r View key transformation, eval=FALSE}
+# Example: Adding columns of standardized names
+trips_2020_working <- trips_2020_working %>% 
+  mutate(
+    start_time = as_datetime(started_at, format="%Y-%m-%d %H:%M:%S"),
+    end_time = as_datetime(ended_at, format="%Y-%m-%d %H:%M:%S"),
+    usertype = member_casual
+  )
+
+# Example: Adding new columns ride_duration and day_of_the_week
+trips_2020_working <- trips_2020_working %>% 
+  mutate(
+    ride_length = difftime(end_time, start_time, units="secs"),
+    day_of_week = weekdays(start_time)
+  )
+
+# Example: Selecting common useful columns
+trips_2020_cleaned <- trips_2020_working %>% 
+  select(
+    ride_id,
+    start_time, 
+    end_time, 
+    start_station_name, 
+    start_station_id, 
+    end_station_name, 
+    end_station_id, 
+    usertype, 
+    ride_length, 
+    day_of_week
+  )
+
+# Example: Combining 2019 and 2020
+all_trips_cleaned <- bind_rows(trips_2019_cleaned, trips_2020_cleaned)
+```
+
+## 3.4 Cleaned Dataset Preview
+
+```{r Cleaned Preview}
+head(all_trips_cleaned)
+```
+
+---
+
+# 4. Analysis
+
+This section explores how members an casual riders differ in their patterns
+
+## 4.1 Ride Volume Comparison
+
+```{r Number of rides plot, echo=FALSE}
+all_trips %>% 
+  group_by(usertype) %>% 
+  summarise(number_of_rides = n()) %>% 
+  ggplot(aes(x = usertype, y = number_of_rides, fill = usertype)) + geom_col(position = "dodge") +
+  labs(title="Number of Rides vs. User Type", subtitle="Count of total number of rides for casual riders and members", 
+       caption= "Data gathered from Divvy Bikes", x="User Type", y="Number of Rides") +
+  scale_fill_manual("User Type", values=c("member"="#1E88E5", "casual"="#DEB53B"))
+```
+
+Members make up over 10x more of the total amount of rides than casual riders.
+
+
+## 4.2 Ride Duration Comparison
+
+```{r Ride Duration Plot, echo=FALSE}
+all_trips %>% 
+  group_by(usertype) %>% 
+  summarise(sum_ride_length = sum(ride_length), average_duration = median(as.numeric(ride_length))) %>% 
+  ggplot(aes(x = usertype, y = average_duration, fill = usertype)) + geom_col(position = "dodge") +
+  labs(title="Median Ride Duration vs. User Type", subtitle="Median duration of rides for casual riders and members", 
+       caption= "Data gathered from Divvy Bikes", x="User Type", y="Median Ride Duration") +
+  scale_fill_manual("User Type", values=c("member"="#1E88E5", "casual"="#DEB53B"))
+```
+
+Casual users, on average, ride 2.5x longer than members.
+
+
+## 4.3 Weekly Usage Trends
+
+``` {r Number of Rides Plot day of the week, echo=FALSE}
+ggplot(summarized_data, aes(x = day_of_week, y = number_of_rides, fill = usertype)) + 
+  geom_col(position = "dodge") + 
+  scale_fill_manual("User Type", values=c("member"="#1E88E5", "casual"="#DEB53B")) +
+  scale_y_discrete(labels = label_comma()) +
+  labs(title="Number of Rides per Day of the Week", subtitle="Casual Rider vs. Member", 
+       caption= "Data gathered from Divvy Bikes", x="Day of the Week", y="Number of Rides")
+```
+
+Members make up the significant chunk of rides with higher volume Monday through Friday than the weekends, likely due to daily commuters.
+Casual riders have a larger volume on the weekends, likely due to leisure and tourism.
+
+
+## 4.4 Ride Duration by Day of Week
+
+```{r Ride Duration Plot day of week, echo=FALSE}
+ggplot(summarized_data_median, aes(x = day_of_week, y = as.numeric(average_duration), fill = usertype)) + 
+  geom_col(position = "dodge") + 
+  scale_fill_manual("User Type", values=c("member"="#1E88E5", "casual"="#DEB53B")) +
+  scale_y_discrete(labels = label_comma()) +
+  labs(title="Median ride length per Day of the Week", subtitle="Casual Rider vs. Member", 
+       caption= "Data gathered from Divvy Bikes", x="Day of the Week", y="Median Ride Duration")
+```
+
+Members have typically, on average, consistent ride lengths throughout the week.
+Casual riders seem to have longer rides on weekends and Wednesdays. This is consistent with leisure and sight-seeing tourism.
+
+
+---
+
+# 5. Key Findings
+
+  * Members take **~10x more rides** than casual users.
+  * Casual riders take **2.5x longer rides**.
+  * Members ride mostly during **weekdays** (likely commuting).
+  * Casual riders ride more on **weekends** (likely leisure/tourism).
+  * Casual rider trip duration spike on **Wednesdays and weekends**.
+ 
+---
+
+# 6. Recommendations
+
+Based on the findings above, Cyclistic can take the following actions to convert casual riders into members:
+
+### Recommendation 1 - Create a Weekend-Only or Leisure Tier Membership
+
+  If casual members repeatedly use the bikes for leisure, offering a bike membership that has more restrictions, but at a lower price, may attract those users instead of them paying for the full membership. This plan converts a large chunk of casual riders who are price-sensitive but consistent in their leisure behavior.
+  
+### Recommendation 2 - Introduce Cost-Saving Prompts for Casual Riders taking long trips
+
+  After a casual rider takes a long trip, or rides a suffiencent amount of time in a month, we could send the user a message on the app saying something along the lines of
+  
+  "You could have saved X% with a membership" or "You could have saved $X with a membership"
+  
+This message showing the amount of money they could have saved along with a prompt to sign up will encourage conversion.
+
+### Recommendation 3 - Target Weekend Casual Riders with Well-Placed Digital Ads
+  
+  Since casual ridership spikes on weekends, we would know exactly when or where they are riding. We could serve the ads in tourist hotspots and popular event areas on Friday afternoons, Saturdays and Sundays. This increases visibility at the moment users are most likely to convert.
+
+---
+
+# Limitations on Data and Analysis
+
+The following are some limitations on the data and the ability to use it to do analysis:
+  
+  * The datasets only cover Q1 of both 2019 and 2020. We are missing data for the other quarters which could influence findings and recommendations
+  * The data does not include any personal information about the users. It could be the case that there are very few repeat casual riders, which would influence recommendations.
+  * Q1 of 2020 included the beginning of the 2020 pandemic, influencing user behavior at the end of the quarter. User behavior could also be different today after the pandemic.
+  
+---
+
+# Appendix
+
+#### A: Full cleaning Script
+
+#### B: Full Analysis Script
+
+#### C: Raw Data
+
+---
+
+This project comes from Google Data Analyst Certificate on Coursera.org
+
+Cyclistic is not a real company and the data is purposefully not complete to protect user information.
