@@ -18,6 +18,7 @@ Digital marketing campaigns activated around high-casual-usage times and locatio
 
 Together, these approaches align directly with observed behaviors and have strong potential to convert casual users into annual members while preserving the value members already receive.
 
+---
 
 This project comes from Google Data Analyst Certificate on Coursera.org
 
